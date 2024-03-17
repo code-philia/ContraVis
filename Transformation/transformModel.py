@@ -99,9 +99,11 @@ class TransformModelTrainer():
         scores = []
         for ref_distances, tar_distances in zip(distance_to_c_ref, distance_to_c_tar):
             # sort
-            ref_sorted_indices = np.argsort(ref_distances)[:3]
-            tar_sorted_indices = np.argsort(tar_distances)[:3]
+            ref_sorted_indices = np.argsort(ref_distances)
+            tar_sorted_indices = np.argsort(tar_distances)
             # 检查最近距离是否不一致
+            ref_sorted_indices = ref_sorted_indices[:3]
+            tar_sorted_indices = tar_sorted_indices[:3]
             if ref_sorted_indices[0] != tar_sorted_indices[0]:
             # 如果最近的距离不一致，则给予显著的负得分
                 scores.append(-1)
@@ -231,6 +233,7 @@ class TransformModelTrainer():
         if len(valid_indices) > 0:
             # 获取满足条件的最高全局相似度得分的索引
             best_match_index = valid_indices[np.argmax(global_scores[valid_indices])]
+            # print('best_match_index',best_match_index)
             return best_match_index, ref_samples[best_match_index]
         else:
             # 如果没有找到满足条件的样本，返回None或其他适当的值
@@ -294,12 +297,13 @@ class TransformModelTrainer():
         optimizer = optim.Adam(self.model.parameters(), lr=lr)
         # Assume tar_tensor and ref_tensor are your data in PyTorch tensor format
         need_Remove = self.align_ref_data()
-        print("finished aligned",need_Remove)
+        print("finished aligned")
         #TODO
         # self.tar_train = np.concatenate((self.tar_data, self.tar_proxy),axis=0)
         # self.ref_train = np.concatenate((self.ref_data, self.ref_proxy),axis=0)
-        self.tar_train = self.tar_data
-        self.ref_train = self.ref_data
+        self.tar_train = self.tar_data[~need_Remove]
+        self.ref_train = self.ref_data[~need_Remove]
+        print('after removed',self.tar_train.shape, self.ref_train.shape)
         tar_tensor = torch.tensor(self.tar_train, dtype=torch.float32).cuda() 
         ref_tensor = torch.tensor(self.ref_train, dtype=torch.float32).cuda()
         tar_tensor = tar_tensor.to(self.device)
