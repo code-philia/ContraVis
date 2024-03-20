@@ -22,27 +22,31 @@ from scipy.stats import spearmanr
 RANDOM_STATE = 10
 # Define the autoencoder
 class Autoencoder(nn.Module):
-    def __init__(self, input_dim=512, encoding_dim=256,hidden_dim=256):
+    def __init__(self, input_dim=512, encoding_dim=1024,hidden_dim=1024):
         super(Autoencoder, self).__init__()
         
         # Encoder: tar to ref
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, encoding_dim),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Linear(encoding_dim, hidden_dim),
-            nn.ReLU(),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
             nn.Linear(encoding_dim, input_dim),
-            nn.ReLU()
+            nn.LeakyReLU()
         )
         
         # Decoder: ref to tar
         self.decoder = nn.Sequential(
             nn.Linear(input_dim, encoding_dim),
-            nn.ReLU(),
+            nn.LeakyReLU(),
             nn.Linear(encoding_dim, hidden_dim),
-            nn.ReLU(),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LeakyReLU(),
             nn.Linear(encoding_dim, input_dim),
-            nn.ReLU()
+            nn.LeakyReLU()
         )
         
     def forward(self, x):
@@ -101,11 +105,11 @@ class TransformModelTrainer():
             # sort
             ref_sorted_indices = np.argsort(ref_distances)
             tar_sorted_indices = np.argsort(tar_distances)
-            # 检查最近距离是否不一致
+            # just check
             ref_sorted_indices = ref_sorted_indices[:3]
             tar_sorted_indices = tar_sorted_indices[:3]
             if ref_sorted_indices[0] != tar_sorted_indices[0]:
-            # 如果最近的距离不一致，则给予显著的负得分
+            # if the closest distance is not equal just give 1
                 scores.append(-1)
             else:
                 # 否则，计算Spearman等级相关系数
@@ -211,25 +215,26 @@ class TransformModelTrainer():
                 scores.append(-1)
             else:
                 # Otherwise, calculate the Spearman rank correlation coefficient
-                coef, _ = spearmanr(ref_sorted_indices, tar_sorted_indices)
-                scores.append(coef)
+                # coef, _ = spearmanr(ref_sorted_indices, tar_sorted_indices)
+                scores.append(1)
 
         return np.array(scores)
     
     def find_replacement_for_unaligned(self, tar_index):
-        ref_indicates = self.ref_nn_indices[tar_index]
-        ref_samples = self.ref_data[ref_indicates]
-        best_score = -np.inf  # Initialize with a very low score
-        best_ref_new_index = None
+        tar_indicates = self.tar_nn_indices[tar_index]
+        ref_samples = self.ref_data[tar_indicates]
+        # best_score = -np.inf  # Initialize with a very low score
+        # best_ref_new_index = None
         global_scores = self.calculate_global_similarity(self.tar_data[tar_index], ref_samples)
-        nn_indicates = self.tar_nn_indices[tar_index]
-        ref_sample_nn = self.ref_nn_indices[ref_indicates]
-        common_nn_counts = np.zeros(len(ref_sample_nn), dtype=int)
-        for i in range(len(ref_sample_nn)):
-            common_nn_counts[i] = np.intersect1d(ref_sample_nn, nn_indicates).size
+        # nn_indicates = self.tar_nn_indices[tar_index]
+        # ref_sample_nn = self.ref_nn_indices[tar_indicates]
+        # common_nn_counts = np.zeros(len(ref_sample_nn), dtype=int)
+        # for i in range(len(ref_sample_nn)):
+        #     common_nn_counts[i] = np.intersect1d(ref_sample_nn, nn_indicates).size
         # Now best_ref_new_index points to the best replacement sample in ref_data
-        valid_indices = np.where((common_nn_counts >= 2) & (global_scores > 0))[0]
-        # 如果存在有效索引，选择全局相似度得分最高的参考样本
+        valid_indices = np.where( global_scores > 0)[0]
+        # print("valid_indices",valid_indices)
+        # if have the valid indicates select the highest similarity sample
         if len(valid_indices) > 0:
             # 获取满足条件的最高全局相似度得分的索引
             best_match_index = valid_indices[np.argmax(global_scores[valid_indices])]
@@ -289,6 +294,7 @@ class TransformModelTrainer():
             # Get the original index in ref_data
             if new_ref is not None:
                 self.ref_data[i] = new_ref
+            else:
                 need_Remove.append(i) ## no matched then remove
         return need_Remove
     
@@ -297,13 +303,12 @@ class TransformModelTrainer():
         optimizer = optim.Adam(self.model.parameters(), lr=lr)
         # Assume tar_tensor and ref_tensor are your data in PyTorch tensor format
         need_Remove = self.align_ref_data()
-        print("finished aligned")
+        print("finished aligned",len(need_Remove))
         #TODO
         # self.tar_train = np.concatenate((self.tar_data, self.tar_proxy),axis=0)
         # self.ref_train = np.concatenate((self.ref_data, self.ref_proxy),axis=0)
-        self.tar_train = self.tar_data[~need_Remove]
-        self.ref_train = self.ref_data[~need_Remove]
-        print('after removed',self.tar_train.shape, self.ref_train.shape)
+        self.tar_train = self.tar_data
+        self.ref_train = self.ref_data
         tar_tensor = torch.tensor(self.tar_train, dtype=torch.float32).cuda() 
         ref_tensor = torch.tensor(self.ref_train, dtype=torch.float32).cuda()
         tar_tensor = tar_tensor.to(self.device)
