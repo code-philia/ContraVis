@@ -216,14 +216,17 @@ class AlignedSpitalEdgeConstructor(SpatialEdgeConstructor):
         # load reference and targte train data
         train_data = self.data_provider.train_representation(self.epoch)
         train_data = train_data.reshape(train_data.shape[0],train_data.shape[1])
+        
+        tar_train_data = self.tar_provider.train_representation(self.epoch)
+        tar_train_data = tar_train_data.reshape(tar_train_data.shape[0],tar_train_data.shape[1])
         # train_data = np.concatenate((train_data,  self.trans_tar),axis=0)
 
         # if self.b_n_epochs == 0:
         """if we do not consider the boundary sample"""
         complex,_,_,_ = self._construct_fuzzy_complex(train_data)
-        complex_tar,_,_,_ = self._construct_fuzzy_complex(self.trans_tar)
-        # tw_complex,_,_,_ =self._construct_target_wise_complex(train_data, self.trans_tar)
-        edge_to, edge_from, weight = self._construct_edge_dataset(complex,complex_tar,None,offset=len(train_data))
+        complex_tar,_,_,_ = self._construct_fuzzy_complex(tar_train_data)
+        tw_complex,_,_,_ =self._construct_target_wise_complex(train_data, self.trans_tar)
+        edge_to, edge_from, weight = self._construct_edge_dataset(complex,complex_tar,tw_complex,offset=len(train_data))
 
         feature_vectors = np.concatenate((train_data, self.trans_tar), axis=0)
         
